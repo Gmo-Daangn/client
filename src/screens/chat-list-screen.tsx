@@ -1,16 +1,12 @@
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS } from '@/src/constants/colors';
 import { useChat } from '@/src/context/chat-context';
-import type { RootStackParamList } from '@/src/navigation/root-navigator';
+import { useRootNavigation } from '@/src/navigation/use-root-navigation';
 import type { ChatRoom } from '@/src/types/chat';
 import { formatRelativeTime } from '@/src/utils/format-time';
-
-type Navigation = NativeStackNavigationProp<RootStackParamList>;
 
 function ChatRow({ chat, onPress }: { chat: ChatRoom; onPress: () => void }) {
   const lastMessage = chat.messages[chat.messages.length - 1];
@@ -47,7 +43,7 @@ function ChatRow({ chat, onPress }: { chat: ChatRoom; onPress: () => void }) {
 }
 
 export function ChatListScreen() {
-  const navigation = useNavigation<Navigation>();
+  const rootNavigation = useRootNavigation();
   const { chats } = useChat();
 
   const sortedChats = [...chats].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -70,7 +66,7 @@ export function ChatListScreen() {
           renderItem={({ item }) => (
             <ChatRow
               chat={item}
-              onPress={() => navigation.navigate('ChatRoom', { chatId: item.id })}
+              onPress={() => rootNavigation.navigate('ChatRoom', { chatId: item.id })}
             />
           )}
           ItemSeparatorComponent={() => <View style={styles.separator} />}

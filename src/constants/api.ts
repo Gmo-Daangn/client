@@ -14,3 +14,4 @@ export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? getDefaultBaseUrl
 export const AUTH_SIGNUP_PATH = '/api/v1/auth';
 export const AUTH_LOGIN_PATH = '/api/v1/auth/login';
 export const MEMBERS_ME_PATH = '/api/v1/members';
+export const POSTS_PATH = '/api/v1/posts';

@@ -23,6 +23,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     bottom: 24,
+    zIndex: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -34,7 +35,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 8,
   },
   pressed: {
     opacity: 0.85,

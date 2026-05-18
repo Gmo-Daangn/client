@@ -1,11 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Image } from 'expo-image';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { COLORS } from '@/src/constants/colors';
-import type { RootStackParamList } from '@/src/navigation/root-navigator';
+import { useRootNavigation } from '@/src/navigation/use-root-navigation';
 import type { Product } from '@/src/types/product';
 
 type Props = {
@@ -17,10 +15,10 @@ function formatPrice(price: number) {
 }
 
 export function ProductCard({ product }: Props) {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const rootNavigation = useRootNavigation();
 
   const handlePress = () => {
-    navigation.navigate('ProductDetail', { productId: product.id });
+    rootNavigation.navigate('ProductDetail', { productId: product.id });
   };
 
   return (
