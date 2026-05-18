@@ -19,6 +19,7 @@ export type PostPage = {
 
 export type PostDetail = {
   postId: number;
+  sellerMemberId?: number;
   sellerNickname: string;
   title: string;
   content: string;

@@ -1,5 +1,15 @@
+import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS } from '@/src/constants/colors';
@@ -9,7 +19,10 @@ import type { ChatRoom } from '@/src/types/chat';
 import { formatRelativeTime } from '@/src/utils/format-time';
 
 function ChatRow({ chat, onPress }: { chat: ChatRoom; onPress: () => void }) {
-  const lastMessage = chat.messages[chat.messages.length - 1];
+  const lastMessage =
+    chat.lastMessagePreview ??
+    chat.messages[chat.messages.length - 1]?.text ??
+    '대화를 시작해보세요';
 
   return (
     <Pressable
@@ -22,11 +35,13 @@ function ChatRow({ chat, onPress }: { chat: ChatRoom; onPress: () => void }) {
           <Text style={styles.name} numberOfLines={1}>
             {chat.otherUserName}
           </Text>
-          <Text style={styles.location}>{chat.otherUserLocation}</Text>
+          {chat.otherUserLocation ? (
+            <Text style={styles.location}>{chat.otherUserLocation}</Text>
+          ) : null}
           <Text style={styles.time}>· {formatRelativeTime(chat.updatedAt)}</Text>
         </View>
         <Text style={styles.lastMessage} numberOfLines={1}>
-          {lastMessage?.text ?? '대화를 시작해보세요'}
+          {lastMessage}
         </Text>
       </View>
 
@@ -34,7 +49,9 @@ function ChatRow({ chat, onPress }: { chat: ChatRoom; onPress: () => void }) {
         <Image source={{ uri: chat.productImageUrl }} style={styles.productThumb} />
         {chat.unreadCount > 0 && (
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>{chat.unreadCount}</Text>
+            <Text style={styles.badgeText}>
+              {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
+            </Text>
           </View>
         )}
       </View>
@@ -44,9 +61,15 @@ function ChatRow({ chat, onPress }: { chat: ChatRoom; onPress: () => void }) {
 
 export function ChatListScreen() {
   const rootNavigation = useRootNavigation();
-  const { chats } = useChat();
+  const { chats, roomsLoading, roomsError, refreshRooms } = useChat();
 
   const sortedChats = [...chats].sort((a, b) => b.updatedAt - a.updatedAt);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshRooms();
+    }, [refreshRooms]),
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -54,15 +77,27 @@ export function ChatListScreen() {
         <Text style={styles.headerTitle}>채팅</Text>
       </View>
 
-      {sortedChats.length === 0 ? (
+      {roomsLoading && sortedChats.length === 0 ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
+      ) : sortedChats.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>아직 채팅이 없어요</Text>
           <Text style={styles.emptySub}>상품에서 채팅하기를 눌러 대화를 시작해보세요.</Text>
+          {roomsError ? <Text style={styles.errorText}>{roomsError}</Text> : null}
         </View>
       ) : (
         <FlatList
           data={sortedChats}
           keyExtractor={(item) => item.id}
+          refreshControl={
+            <RefreshControl
+              refreshing={roomsLoading}
+              onRefresh={() => void refreshRooms()}
+              tintColor={COLORS.primary}
+            />
+          }
           renderItem={({ item }) => (
             <ChatRow
               chat={item}
@@ -70,6 +105,13 @@ export function ChatListScreen() {
             />
           )}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ListHeaderComponent={
+            roomsError ? (
+              <Pressable onPress={() => void refreshRooms()} style={styles.errorBanner}>
+                <Text style={styles.errorBannerText}>{roomsError} · 탭하여 다시 시도</Text>
+              </Pressable>
+            ) : null
+          }
         />
       )}
     </SafeAreaView>
@@ -91,6 +133,11 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: COLORS.textPrimary,
+  },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   row: {
     flexDirection: 'row',
@@ -182,6 +229,22 @@ const styles = StyleSheet.create({
   },
   emptySub: {
     fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  errorText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  errorBanner: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: COLORS.surface,
+  },
+  errorBannerText: {
+    fontSize: 13,
     color: COLORS.textSecondary,
     textAlign: 'center',
   },

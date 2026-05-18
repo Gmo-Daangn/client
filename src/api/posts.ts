@@ -2,6 +2,7 @@ import { apiRequest } from '@/src/api/http';
 import { unwrapData } from '@/src/api/unwrap';
 import { POSTS_PATH } from '@/src/constants/api';
 import type { ApiResponse } from '@/src/types/member';
+import { normalizePostDetail } from '@/src/utils/normalize-post-detail';
 import type {
   CreatePostRequest,
   CreatePostResponse,
@@ -54,7 +55,7 @@ export async function fetchPostDetail(postId: number): Promise<PostDetail> {
     method: 'GET',
   });
 
-  return unwrapData<PostDetail>(raw);
+  return normalizePostDetail(unwrapData<unknown>(raw));
 }
 
 /** PUT /api/v1/posts/{postId} */
@@ -65,7 +66,7 @@ export async function updatePost(postId: number, body: UpdatePostRequest): Promi
     body: JSON.stringify(body),
   });
 
-  return unwrapData<PostDetail>(raw);
+  return normalizePostDetail(unwrapData<unknown>(raw));
 }
 
 /** DELETE /api/v1/posts/{postId}?memberId={memberId} */

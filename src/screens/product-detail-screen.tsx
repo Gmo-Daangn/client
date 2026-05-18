@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { getAccessToken } from '@/src/api/token-storage';
 import { deletePost, fetchPostDetail } from '@/src/api/posts';
 import { MannerTemperature } from '@/src/components/manner-temperature';
 import { COLORS } from '@/src/constants/colors';
@@ -26,6 +27,8 @@ import { useChat } from '@/src/context/chat-context';
 import type { RootStackParamList } from '@/src/navigation/root-navigator';
 import type { Product } from '@/src/types/product';
 import { postDetailToProduct } from '@/src/utils/post-to-product';
+import { parseMemberIdFromJwt } from '@/src/utils/parse-member-id';
+import { resolveSellerMemberId } from '@/src/utils/resolve-seller-member-id';
 
 function isOwnPost(sellerNickname: string, myNickname: string | null | undefined) {
   const seller = sellerNickname.trim();
@@ -49,13 +52,15 @@ export function ProductDetailScreen({ route }: Props) {
   const postId = Number(productId);
 
   const { member, userName } = useAuth();
-  const { ensureChatForProduct } = useChat();
+  const { enterChatForProduct, chats } = useChat();
   const [product, setProduct] = useState<Product | null>(null);
   const [sellerNickname, setSellerNickname] = useState('');
+  const [sellerMemberId, setSellerMemberId] = useState<number | undefined>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [liked, setLiked] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [chatStarting, setChatStarting] = useState(false);
 
   const myNickname = member?.nickname ?? userName;
   const isMyPost = isOwnPost(sellerNickname, myNickname);
@@ -73,12 +78,14 @@ export function ProductDetailScreen({ route }: Props) {
     try {
       const detail = await fetchPostDetail(postId);
       setSellerNickname(detail.sellerNickname);
+      setSellerMemberId(detail.sellerMemberId);
       setProduct(postDetailToProduct(detail));
     } catch (err) {
       const message = err instanceof Error ? err.message : '게시글을 불러오지 못했어요.';
       setError(message);
       setProduct(null);
       setSellerNickname('');
+      setSellerMemberId(undefined);
     } finally {
       setLoading(false);
     }
@@ -90,8 +97,81 @@ export function ProductDetailScreen({ route }: Props) {
 
   const handleStartChat = () => {
     if (!product) return;
-    const chatId = ensureChatForProduct(product);
-    navigation.navigate('ChatRoom', { chatId });
+
+    const myMemberId = member?.memberId ?? parseMemberIdFromJwt(getAccessToken());
+    if (!myMemberId) {
+      Alert.alert(
+        '회원 정보 필요',
+        '채팅을 시작하려면 회원 ID가 필요해요. 로그아웃 후 다시 로그인해 주세요.',
+      );
+      return;
+    }
+
+    setChatStarting(true);
+    void (async () => {
+      try {
+        const detail = await fetchPostDetail(postId);
+        const sellerId = detail.sellerMemberId;
+        const sellerNick = detail.sellerNickname;
+
+        if (!sellerId) {
+          Alert.alert(
+            '채팅 불가',
+            '게시글에 판매자 회원 ID(memberId)가 없어요. 서버 게시글 상세 API를 확인해 주세요.',
+          );
+          return;
+        }
+
+        if (myMemberId === sellerId) {
+          Alert.alert('채팅 불가', '내 게시물에는 채팅할 수 없어요.');
+          return;
+        }
+
+        const existingRoom = chats.find(
+          (c) =>
+            c.productId === product.id && c.otherUserName.trim() === sellerNick.trim(),
+        );
+        if (existingRoom) {
+          navigation.navigate('ChatRoom', { chatId: existingRoom.id });
+          return;
+        }
+
+        const targetMemberId = await resolveSellerMemberId({
+          myMemberId,
+          sellerNickname: sellerNick,
+          productId: product.id,
+          sellerMemberIdFromPost: sellerId,
+          localRooms: chats,
+        });
+
+        if (!targetMemberId) {
+          Alert.alert('채팅 불가', '판매자 회원 ID를 확인할 수 없어요.');
+          return;
+        }
+
+        if (myMemberId === targetMemberId) {
+          Alert.alert('채팅 불가', '본인과는 채팅할 수 없어요.');
+          return;
+        }
+
+        const chatId = await enterChatForProduct({
+          product,
+          targetMemberId,
+        });
+        navigation.navigate('ChatRoom', { chatId });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : '채팅방을 만들지 못했어요.';
+        const hint =
+          message.includes('존재하지 않는 ID') || message.includes('본인과의 채팅방')
+            ? '\n\n로그아웃 후 다시 로그인해 보세요. (DB 초기화 등으로 회원 ID가 바뀌었을 수 있어요.)'
+            : message.includes('Network request failed')
+              ? '\n\n실기기에서는 .env의 EXPO_PUBLIC_API_URL을 Mac IP(예: http://192.168.x.x:8080)로 바꿔 주세요.'
+              : '';
+        Alert.alert('채팅 시작 실패', message + hint);
+      } finally {
+        setChatStarting(false);
+      }
+    })();
   };
 
   const handleEdit = useCallback(() => {
@@ -249,8 +329,17 @@ export function ProductDetailScreen({ route }: Props) {
           ) : (
             <Pressable
               onPress={handleStartChat}
-              style={({ pressed }) => [styles.chatButton, pressed && styles.chatPressed]}>
-              <Text style={styles.chatButtonText}>채팅하기</Text>
+              disabled={chatStarting}
+              style={({ pressed }) => [
+                styles.chatButton,
+                pressed && styles.chatPressed,
+                chatStarting && styles.chatButtonDisabled,
+              ]}>
+              {chatStarting ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.chatButtonText}>채팅하기</Text>
+              )}
             </Pressable>
           )}
         </View>
@@ -371,6 +460,9 @@ const styles = StyleSheet.create({
   },
   chatPressed: {
     opacity: 0.85,
+  },
+  chatButtonDisabled: {
+    opacity: 0.7,
   },
   chatButtonText: {
     color: '#FFFFFF',
