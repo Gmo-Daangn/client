@@ -5,6 +5,7 @@ import type { RootStackParamList } from '@/src/navigation/root-navigator';
 
 const ROOT_STACK_ROUTE_NAMES = new Set([
   'Tabs',
+  'Notifications',
   'CreatePost',
   'EditPost',
   'ProductDetail',

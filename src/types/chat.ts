@@ -4,6 +4,7 @@ export type Message = {
   text: string;
   sender: 'me' | 'other';
   createdAt: number;
+  unreadCount?: number;
   edited?: boolean;
   deleted?: boolean;
 };

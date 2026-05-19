@@ -20,8 +20,11 @@ import {
 import { fetchPostDetail } from '@/src/api/posts';
 import { getAccessToken } from '@/src/api/token-storage';
 import { useAuth } from '@/src/context/auth-context';
-import { parseMemberIdFromJwt } from '@/src/utils/parse-member-id';
+import { shouldSuppressNotificationToast } from '@/src/navigation/navigation-ref';
+import { publishNotificationToast } from '@/src/services/notification-toast-bridge';
 import { chatStompClient } from '@/src/services/chat-stomp-client';
+import { createLocalChatNotification } from '@/src/utils/create-local-chat-notification';
+import { parseMemberIdFromJwt } from '@/src/utils/parse-member-id';
 import type { ChatMessageDto } from '@/src/types/chat-api';
 import type { ChatRoom, Message } from '@/src/types/chat';
 import type { Product } from '@/src/types/product';
@@ -77,6 +80,33 @@ async function enrichRoomWithPost(room: ChatRoom): Promise<ChatRoom> {
   }
 }
 
+function getReadStatusMemberId(payload: unknown): number | undefined {
+  if (!payload || typeof payload !== 'object') return undefined;
+
+  const record = payload as Record<string, unknown>;
+  const memberId = record.memberId;
+  const nestedMemberId =
+    record.data && typeof record.data === 'object'
+      ? (record.data as Record<string, unknown>).memberId
+      : undefined;
+  const numericMemberId =
+    typeof memberId === 'number' ? memberId : Number(memberId ?? nestedMemberId);
+
+  return Number.isFinite(numericMemberId) ? numericMemberId : undefined;
+}
+
+function clearOutgoingUnread(messages: Message[]): Message[] {
+  let changed = false;
+  const next = messages.map((message) => {
+    if (message.sender !== 'me' || !message.unreadCount) return message;
+
+    changed = true;
+    return { ...message, unreadCount: 0 };
+  });
+
+  return changed ? next : messages;
+}
+
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { isLoggedIn, member, accessToken } = useAuth();
   const memberId = member?.memberId ?? parseMemberIdFromJwt(accessToken ?? getAccessToken());
@@ -98,14 +128,37 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     const roomId = String(dto.roomId);
     const mapped = apiMessageToMessage(dto, myId);
+    const isMine = mapped.sender === 'me';
+    const isActiveRoom = activeRoomIdRef.current === roomId;
 
-    setChats((prev) =>
-      prev.map((chat) => {
+    if (!isMine && isActiveRoom && !mapped.deleted) {
+      void markChatRoomAsRead(dto.roomId, { memberId: myId }).catch((error) => {
+        console.warn('[chat] 읽음 처리 실패:', error);
+      });
+    }
+
+    setChats((prev) => {
+      const currentChat = prev.find((chat) => chat.id === roomId);
+
+      if (currentChat && !isMine && !isActiveRoom && !mapped.deleted) {
+        const toast = createLocalChatNotification({
+          roomId: dto.roomId,
+          messageId: dto.messageId,
+          receiverId: myId,
+          title: currentChat.otherUserName || '새 메시지',
+          message: mapped.text,
+        });
+
+        if (!shouldSuppressNotificationToast(toast)) {
+          publishNotificationToast(toast);
+        }
+      }
+
+      return prev.map((chat) => {
         if (chat.id !== roomId) return chat;
 
-        const isMine = mapped.sender === 'me';
         const unreadCount =
-          isMine || activeRoomIdRef.current === roomId ? chat.unreadCount : chat.unreadCount + 1;
+          isMine || isActiveRoom ? chat.unreadCount : chat.unreadCount + 1;
 
         const baseMessages =
           isMine && mapped.messageId > 0
@@ -118,8 +171,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           updatedAt: mapped.createdAt,
           unreadCount,
         });
-      }),
-    );
+      });
+    });
   }, []);
 
   useEffect(() => {
@@ -132,31 +185,65 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     chatStompClient.connect(accessToken);
   }, [isLoggedIn, accessToken]);
 
+  const subscribedRoomIdsKey = useMemo(
+    () =>
+      chats
+        .map((chat) => chat.id)
+        .filter((id) => Number.isFinite(Number(id)))
+        .sort()
+        .join(','),
+    [chats],
+  );
+
   useEffect(() => {
-    if (!activeRoomId) return;
+    if (!isLoggedIn || !accessToken || !subscribedRoomIdsKey) return;
 
-    const roomId = Number(activeRoomId);
-    if (!Number.isFinite(roomId)) return;
+    const roomIds = subscribedRoomIdsKey.split(',').map(Number).filter((id) => id > 0);
 
-    chatStompClient.registerRoom(roomId, {
-      onMessage: applyIncomingMessage,
-      onReadStatus: () => {
-        setChats((prev) => {
-          let changed = false;
-          const next = prev.map((chat) => {
-            if (chat.id !== activeRoomId || chat.unreadCount === 0) return chat;
-            changed = true;
-            return { ...chat, unreadCount: 0 };
+    for (const roomId of roomIds) {
+      chatStompClient.registerRoom(roomId, {
+        onMessage: applyIncomingMessage,
+        onReadStatus: (payload) => {
+          const readerId = getReadStatusMemberId(payload);
+          const myId = memberIdRef.current;
+          const isReaderMe = myId !== undefined && readerId === myId;
+          const isReaderOther = myId !== undefined && readerId !== undefined && readerId !== myId;
+          const shouldClearRoomUnread =
+            isReaderMe || (readerId === undefined && activeRoomIdRef.current === String(roomId));
+
+          setChats((prev) => {
+            let changed = false;
+            const next = prev.map((chat) => {
+              if (chat.id !== String(roomId)) return chat;
+
+              let nextChat = chat;
+              if (shouldClearRoomUnread && chat.unreadCount > 0) {
+                nextChat = { ...nextChat, unreadCount: 0 };
+                changed = true;
+              }
+
+              if (isReaderOther) {
+                const messages = clearOutgoingUnread(nextChat.messages);
+                if (messages !== nextChat.messages) {
+                  nextChat = { ...nextChat, messages };
+                  changed = true;
+                }
+              }
+
+              return nextChat;
+            });
+            return changed ? next : prev;
           });
-          return changed ? next : prev;
-        });
-      },
-    });
+        },
+      });
+    }
 
     return () => {
-      chatStompClient.unregisterRoom(roomId);
+      for (const roomId of roomIds) {
+        chatStompClient.unregisterRoom(roomId);
+      }
     };
-  }, [activeRoomId, applyIncomingMessage]);
+  }, [isLoggedIn, accessToken, subscribedRoomIdsKey, applyIncomingMessage]);
 
   const refreshRooms = useCallback(async () => {
     const myId = requireMemberId(memberId);
@@ -293,6 +380,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         text: trimmed,
         sender: 'me',
         createdAt: Date.now(),
+        unreadCount: 1,
       };
 
       setChats((prev) =>

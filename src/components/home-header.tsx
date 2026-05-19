@@ -3,10 +3,14 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { COLORS } from '@/src/constants/colors';
 import { useAuth } from '@/src/context/auth-context';
+import { useNotifications } from '@/src/context/notification-context';
+import { useRootNavigation } from '@/src/navigation/use-root-navigation';
 import { formatTownLabel } from '@/src/utils/format-address';
 
 export function HomeHeader() {
   const { logout, member, refreshMyInfo } = useAuth();
+  const { unreadCount } = useNotifications();
+  const rootNavigation = useRootNavigation();
   const location = formatTownLabel(member?.address);
 
   const handleLogout = () => {
@@ -23,6 +27,10 @@ export function HomeHeader() {
     }
   };
 
+  const openNotifications = () => {
+    rootNavigation.navigate('Notifications');
+  };
+
   return (
     <View style={styles.container}>
       <Pressable style={styles.locationButton} hitSlop={8} onPress={handleRefreshLocation}>
@@ -34,11 +42,16 @@ export function HomeHeader() {
         <Pressable hitSlop={8}>
           <Ionicons name="search-outline" size={26} color={COLORS.textPrimary} />
         </Pressable>
-        <Pressable hitSlop={8}>
+        <Pressable hitSlop={8} onPress={handleLogout}>
           <Ionicons name="menu-outline" size={28} color={COLORS.textPrimary} />
         </Pressable>
-        <Pressable hitSlop={8} onPress={handleLogout}>
+        <Pressable hitSlop={8} onPress={openNotifications} style={styles.bellButton}>
           <Ionicons name="notifications-outline" size={26} color={COLORS.textPrimary} />
+          {unreadCount > 0 ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+            </View>
+          ) : null}
         </Pressable>
       </View>
     </View>
@@ -70,5 +83,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
+  },
+  bellButton: {
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 999,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
   },
 });

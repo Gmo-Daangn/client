@@ -19,6 +19,7 @@ export function apiMessageToMessage(dto: ChatMessageDto, myMemberId: number): Me
     text: dto.deleted ? '삭제된 메시지입니다.' : dto.message,
     sender: dto.senderId === myMemberId ? 'me' : 'other',
     createdAt: new Date(dto.createdAt).getTime(),
+    unreadCount: dto.unreadCount,
     edited: dto.edited,
     deleted: dto.deleted,
   };

@@ -6,6 +6,7 @@ import { ChatRoomScreen } from '@/src/screens/chat-room-screen';
 import { CreatePostScreen } from '@/src/screens/create-post-screen';
 import { EditPostScreen } from '@/src/screens/edit-post-screen';
 import { LoginScreen } from '@/src/screens/login-screen';
+import { NotificationsScreen } from '@/src/screens/notifications-screen';
 import { ProductDetailScreen } from '@/src/screens/product-detail-screen';
 import { SignUpScreen } from '@/src/screens/signup-screen';
 
@@ -13,6 +14,7 @@ export type RootStackParamList = {
   Login: undefined;
   SignUp: undefined;
   Tabs: undefined;
+  Notifications: undefined;
   CreatePost: undefined;
   EditPost: { postId: string };
   ProductDetail: { productId: string };
@@ -29,6 +31,16 @@ export function RootNavigator() {
       {isLoggedIn ? (
         <>
           <Stack.Screen name="Tabs" component={TabNavigator} />
+          <Stack.Screen
+            name="Notifications"
+            component={NotificationsScreen}
+            options={{
+              headerShown: true,
+              title: '알림',
+              headerBackTitle: '뒤로',
+              headerTintColor: '#212124',
+            }}
+          />
           <Stack.Screen
             name="CreatePost"
             component={CreatePostScreen}

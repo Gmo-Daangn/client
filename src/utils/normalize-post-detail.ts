@@ -19,11 +19,9 @@ function sellerIdFromNested(data: Record<string, unknown>): number | undefined {
   return undefined;
 }
 
-/** 게시글 상세 API 응답을 앱 모델로 정규화합니다. */
 export function normalizePostDetail(raw: unknown): PostDetail {
   const data = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
 
-  // 이 백엔드는 게시글 작성자 ID를 `memberId`로 내려줍니다.
   const sellerMemberId =
     coerceMemberId(data.memberId) ??
     coerceMemberId(data.sellerMemberId) ??

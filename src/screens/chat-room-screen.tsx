@@ -114,6 +114,8 @@ function MessageBubble({
 }) {
   const isMine = message.sender === 'me';
   const isDeleted = message.deleted;
+  const unreadCount = isMine && !isDeleted ? message.unreadCount ?? 0 : 0;
+  const hasUnread = unreadCount > 0;
 
   const bubbleContent = (
     <>
@@ -135,7 +137,18 @@ function MessageBubble({
     return (
       <Pressable onLongPress={onLongPress} delayLongPress={400} disabled={isDeleted}>
         <View style={styles.mineRow}>
-          {showTime && <Text style={styles.timeMine}>{formatClockTime(message.createdAt)}</Text>}
+          {hasUnread || showTime ? (
+            <View style={styles.mineMeta}>
+              {hasUnread ? (
+                <Text style={styles.readReceiptMine}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </Text>
+              ) : null}
+              {showTime ? (
+                <Text style={styles.timeMine}>{formatClockTime(message.createdAt)}</Text>
+              ) : null}
+            </View>
+          ) : null}
           <View style={[styles.bubble, styles.bubbleMine, isDeleted && styles.bubbleDeleted]}>
             {bubbleContent}
           </View>
@@ -179,6 +192,7 @@ export function ChatRoomScreen({ route }: Props) {
     setActiveRoomId,
   } = useChat();
   const chat = getChat(chatId);
+  const otherUserName = chat?.otherUserName;
   const [text, setText] = useState('');
   const [messagesLoading, setMessagesLoading] = useState(true);
   const [messagesError, setMessagesError] = useState<string | null>(null);
@@ -215,16 +229,16 @@ export function ChatRoomScreen({ route }: Props) {
   }, []);
 
   useLayoutEffect(() => {
-    if (!chat) return;
+    if (!otherUserName) return;
     navigation.setOptions({
-      title: chat.otherUserName,
+      title: otherUserName,
       headerRight: () => (
         <Pressable onPress={openHeaderMenu} hitSlop={12} style={styles.headerIcon}>
           <Ionicons name="ellipsis-horizontal" size={22} color={COLORS.textPrimary} />
         </Pressable>
       ),
     });
-  }, [navigation, chat?.otherUserName, openHeaderMenu]);
+  }, [navigation, otherUserName, openHeaderMenu]);
 
   useEffect(() => {
     setActiveRoomId(chatId);
@@ -658,10 +672,19 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     gap: 6,
   },
+  mineMeta: {
+    alignItems: 'flex-end',
+    gap: 2,
+    marginBottom: 4,
+  },
+  readReceiptMine: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
   timeMine: {
     fontSize: 11,
     color: COLORS.textTertiary,
-    marginBottom: 4,
   },
   otherRow: {
     flexDirection: 'row',

@@ -17,6 +17,8 @@ export const MEMBERS_ME_PATH = '/api/v1/members';
 export const POSTS_PATH = '/api/v1/posts';
 export const CHAT_ROOMS_PATH = '/api/v1/chat/rooms';
 export const CHAT_MESSAGES_PATH = '/api/v1/chat/messages';
+export const NOTIFICATIONS_PATH = '/api/v1/notification';
+export const NOTIFICATIONS_SSE_PATH = '/api/v1/notification/sse';
 
 function toWebSocketBaseUrl(httpBaseUrl: string): string {
   if (httpBaseUrl.startsWith('https://')) {
@@ -28,6 +30,5 @@ function toWebSocketBaseUrl(httpBaseUrl: string): string {
   return `ws://${httpBaseUrl}`;
 }
 
-/** 순수 WebSocket STOMP (SockJS 아님). 끝에 `/websocket` 붙이지 않습니다. */
 export const WS_STOMP_URL =
   process.env.EXPO_PUBLIC_WS_URL ?? `${toWebSocketBaseUrl(API_BASE_URL)}/api/ws-stomp`;

@@ -83,7 +83,6 @@ class ChatStompClient {
     }
 
     const client = new Client({
-      // SockJS 없이 RN 내장 WebSocket + brokerURL (스펙: ws://호스트/api/ws-stomp)
       brokerURL,
       connectHeaders: {
         Authorization: `Bearer ${accessToken}`,

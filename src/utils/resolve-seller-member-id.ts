@@ -34,10 +34,6 @@ function pickFromLocalRooms(
   return anyRoom?.otherMemberId;
 }
 
-/**
- * 게시글 API에 sellerMemberId가 없을 때, 채팅 이력에서 상대 회원 ID를 추론합니다.
- * (같은 상품·같은 닉네임 우선, 없으면 다른 상품에서의 대화 상대)
- */
 export async function resolveSellerMemberId(input: {
   myMemberId: number;
   sellerNickname: string;
